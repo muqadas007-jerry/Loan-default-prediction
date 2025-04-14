@@ -1,0 +1,51 @@
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import LabelEncoder, StandardScaler
+from sklearn.impute import SimpleImputer
+from sklearn.metrics import classification_report
+from sklearn.svm import SVC
+from lightgbm import LGBMClassifier
+from imblearn.over_sampling import SMOTE
+from collections import defaultdict
+
+# Load dataset
+df = pd.read_csv("hmeq.csv")  # Update path as needed
+X = df.drop("BAD", axis=1)
+y = df["BAD"]
+
+# Handle missing values
+numeric_cols = X.select_dtypes(include=["float64", "int64"]).columns
+categorical_cols = X.select_dtypes(include=["object"]).columns
+
+# Imputation
+X[numeric_cols] = SimpleImputer(strategy="median").fit_transform(X[numeric_cols])
+X[categorical_cols] = SimpleImputer(strategy="most_frequent").fit_transform(X[categorical_cols])
+
+# Label encoding for categorical
+label_encoders = defaultdict(LabelEncoder)
+for col in categorical_cols:
+    X[col] = label_encoders[col].fit_transform(X[col])
+
+# Standardize numeric features
+X[numeric_cols] = StandardScaler().fit_transform(X[numeric_cols])
+
+# Train-test split
+X_train, X_test, y_train, y_test = train_test_split(X, y, stratify=y, test_size=0.2, random_state=42)
+
+# SMOTE for imbalance
+X_train_res, y_train_res = SMOTE(random_state=42).fit_resample(X_train, y_train)
+
+# Train models
+lgbm = LGBMClassifier(random_state=42)
+svm = SVC(probability=True, random_state=42)
+
+lgbm.fit(X_train_res, y_train_res)
+svm.fit(X_train_res, y_train_res)
+
+# Predictions
+y_pred_lgbm = lgbm.predict(X_test)
+y_pred_svm = svm.predict(X_test)
+
+# Reports
+print("LightGBM Report:\n", classification_report(y_test, y_pred_lgbm))
+print("SVM Report:\n", classification_report(y_test, y_pred_svm))
